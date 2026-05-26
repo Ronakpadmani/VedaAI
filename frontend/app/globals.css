@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-gray text-brand-dark antialiased;
+  }
+}
+
+@layer components {
+  .input-field {
+    @apply w-full rounded-xl border border-brand-border bg-white px-4 py-3 text-sm outline-none transition focus:border-brand-dark focus:ring-1 focus:ring-brand-dark;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-brand-dark px-6 py-3 text-sm font-medium text-white transition hover:bg-black;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-brand-border bg-white px-6 py-3 text-sm font-medium text-brand-dark transition hover:bg-gray-50;
+  }
+
+  .difficulty-easy {
+    @apply text-emerald-600;
+  }
+
+  .difficulty-moderate {
+    @apply text-amber-600;
+  }
+
+  .difficulty-hard {
+    @apply text-rose-600;
+  }
+}
