@@ -1,17 +1,74 @@
 import type { Assignment, QuestionPaper } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+/** Strip trailing slash for consistent URL joining. */
+function normalizeBase(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+/**
+ * REST base URL:
+ * - NEXT_PUBLIC_API_URL when set (direct backend, typical local dev)
+ * - empty string in the browser → same-origin `/api/*` (Next.js rewrites when API_PROXY_URL is set on Vercel)
+ * - API_PROXY_URL or localhost for server-side rendering
+ */
+export function getApiBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return normalizeBase(process.env.NEXT_PUBLIC_API_URL);
+  }
+  if (typeof window !== "undefined") {
+    return "";
+  }
+  const proxy =
+    process.env.API_PROXY_URL || process.env.BACKEND_URL || "";
+  return proxy ? normalizeBase(proxy) : "http://localhost:4000";
+}
+
+const API_URL = getApiBaseUrl();
+
+function apiUnreachableMessage(): string {
+  const target = API_URL || "your deployed API";
+  if (
+    typeof window !== "undefined" &&
+    API_URL.startsWith("http://") &&
+    window.location.protocol === "https:"
+  ) {
+    return (
+      "The API URL must use HTTPS on this site. Set NEXT_PUBLIC_API_URL to https://your-backend... (not http://)."
+    );
+  }
+  if (typeof window !== "undefined" && !process.env.NEXT_PUBLIC_API_URL) {
+    return (
+      "Cannot reach the API server. On Vercel, set NEXT_PUBLIC_API_URL to your backend URL " +
+      "(e.g. Railway), or set API_PROXY_URL (server-only) and redeploy so /api requests are proxied."
+    );
+  }
+  if (API_URL.includes("localhost") && typeof window !== "undefined") {
+    return (
+      "Cannot reach the API at localhost. Set NEXT_PUBLIC_API_URL in Vercel to your public backend URL " +
+      "(see DEPLOYMENT.md)."
+    );
+  }
+  return `Cannot reach the API at ${target}. Check that the backend is running and CORS_ORIGIN includes this site.`;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      ...(options?.body instanceof FormData
-        ? {}
-        : { "Content-Type": "application/json" }),
-      ...options?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        ...(options?.body instanceof FormData
+          ? {}
+          : { "Content-Type": "application/json" }),
+        ...options?.headers,
+      },
+    });
+  } catch (err) {
+    if (err instanceof TypeError) {
+      throw new Error(apiUnreachableMessage());
+    }
+    throw err;
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -72,7 +129,7 @@ export const api = {
       method: "DELETE",
     }),
 
-  pdfUrl: (id: string) => `${API_URL}/api/assignments/${id}/pdf`,
+  pdfUrl: (id: string) => `${API_URL || ""}/api/assignments/${id}/pdf`,
 
   getGroups: () => request<ClassGroup[]>("/api/groups"),
 

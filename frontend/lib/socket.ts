@@ -1,7 +1,24 @@
 import { io, Socket } from "socket.io-client";
 import type { JobProgressEvent } from "./types";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000";
+function getWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) {
+    return process.env.NEXT_PUBLIC_WS_URL.replace(/\/$/, "");
+  }
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return (
+    process.env.API_PROXY_URL?.replace(/\/$/, "") ||
+    process.env.BACKEND_URL?.replace(/\/$/, "") ||
+    "http://localhost:4000"
+  );
+}
+
+const WS_URL = getWsUrl();
 
 let socket: Socket | null = null;
 
@@ -10,6 +27,9 @@ export function getSocket(): Socket {
     socket = io(WS_URL, {
       transports: ["websocket", "polling"],
       autoConnect: true,
+    });
+    socket.on("connect_error", (err) => {
+      console.warn("WebSocket connect_error (progress will use polling):", err.message);
     });
   }
   return socket;

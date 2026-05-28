@@ -35,6 +35,16 @@ export default function AssignmentOutputPage({
     fetchAssignment(id);
   }, [id, fetchAssignment]);
 
+  const isActiveJob =
+    currentAssignment?.status === "queued" ||
+    currentAssignment?.status === "processing";
+
+  useEffect(() => {
+    if (!isActiveJob) return;
+    const interval = setInterval(() => fetchAssignment(id), 3000);
+    return () => clearInterval(interval);
+  }, [id, isActiveJob, fetchAssignment]);
+
   useEffect(() => {
     const unsubscribe = subscribeToAssignment(id, async (event) => {
       handleProgress(event);
@@ -67,12 +77,16 @@ export default function AssignmentOutputPage({
   const isGenerating =
     assignment?.status === "queued" ||
     assignment?.status === "processing" ||
-    (generationProgress > 0 && generationProgress < 100);
+    (generationProgress > 0 && generationProgress < 100 && !assignment?.questionPaper);
 
-  const progress =
-    generationProgress || assignment?.progress || 0;
+  const progress = Math.max(
+    generationProgress,
+    assignment?.progress ?? 0
+  );
   const message =
-    generationMessage || assignment?.progressMessage || "Loading...";
+    assignment?.progressMessage ||
+    generationMessage ||
+    "Loading...";
 
   return (
     <DashboardLayout>
@@ -135,6 +149,14 @@ export default function AssignmentOutputPage({
         ) : (
           <div className="rounded-2xl bg-white p-8 text-center shadow-card">
             <p className="text-brand-muted">Preparing your question paper...</p>
+            {assignment?.status === "queued" && progress === 0 && (
+              <p className="mt-3 text-xs text-brand-muted">
+                If this stays at 0%, set{" "}
+                <code className="rounded bg-gray-100 px-1">START_INLINE_WORKER=true</code>{" "}
+                on Render (or run the worker service) and confirm{" "}
+                <code className="rounded bg-gray-100 px-1">REDIS_URL</code> is set.
+              </p>
+            )}
           </div>
         )}
 

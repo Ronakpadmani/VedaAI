@@ -34,6 +34,18 @@ subscribeAssignmentEvents(broadcastAssignmentProgress);
 
 async function bootstrap(): Promise<void> {
   await connectDatabase();
+
+  if (env.startInlineWorker) {
+    const { startGenerationWorker } = await import("./workers/generationWorker");
+    startGenerationWorker().catch((err) => {
+      console.error("Inline generation worker failed to start:", err);
+    });
+  } else {
+    console.log(
+      "Generation worker not started in this process (set START_INLINE_WORKER=true or run npm run start:worker)"
+    );
+  }
+
   httpServer.listen(env.port, () => {
     console.log(`API server running on http://localhost:${env.port}`);
     console.log(`WebSocket ready on ws://localhost:${env.port}`);

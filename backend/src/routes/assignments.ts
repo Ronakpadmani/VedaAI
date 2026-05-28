@@ -5,6 +5,7 @@ import { Assignment } from "../models/Assignment";
 import { generationQueue } from "../queues/generationQueue";
 import { generateQuestionPaperPdf } from "../services/pdfService";
 import { publishAssignmentEvent } from "../services/eventPublisher";
+import { friendlyMongoError } from "../config/database";
 
 const router = Router();
 const upload = multer({
@@ -111,7 +112,8 @@ router.post(
       res.status(201).json(assignment);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Failed to create assignment";
+        friendlyMongoError(error) ||
+        (error instanceof Error ? error.message : "Failed to create assignment");
       res.status(500).json({ error: message });
     }
   }

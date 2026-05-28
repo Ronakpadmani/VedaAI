@@ -85,7 +85,13 @@ export const useAssignmentStore = create<AssignmentStore>((set, get) => ({
     set({ loading: true });
     try {
       const currentAssignment = await api.getAssignment(id);
-      set({ currentAssignment, loading: false });
+      set({
+        currentAssignment,
+        loading: false,
+        generationProgress: currentAssignment.progress ?? 0,
+        generationMessage:
+          currentAssignment.progressMessage || "Loading...",
+      });
     } catch {
       set({ loading: false });
     }

@@ -75,13 +75,18 @@ VedaAI needs **5 parts** running:
 1. Create account → **Build a Database** → free M0 cluster
 2. **Database Access** → add user + password
 3. **Network Access** → Add IP `0.0.0.0/0` (allow from anywhere for cloud deploy)
-4. **Connect** → Drivers → copy connection string:
+4. **Connect** → **Drivers** → **Node.js** → copy connection string:
 
 ```
 mongodb+srv://USER:PASSWORD@cluster0.xxxxx.mongodb.net/vedaai?retryWrites=true&w=majority
 ```
 
-Save as `MONGODB_URI` for the backend.
+Save as `MONGODB_URI` for the backend (Render/Railway).
+
+**Do not use:**
+
+- **SQL Interface** / JDBC URLs (`…query.mongodb.net` or `atlas-sql-…`) — read-only; causes `command insert not found`
+- Database name `admin` in the path — use `vedaai` (or your app DB name) instead
 
 ---
 
@@ -120,23 +125,43 @@ OPENAI_MODEL=gpt-4o-mini
 
 - Generate a public domain → note URL e.g. `https://vedaai-api.up.railway.app`
 
-**Service 2 – Worker** (duplicate service from same repo)
+**Option A — one Render web service (simplest)**
+
+On the API service only, add:
+
+```
+START_INLINE_WORKER=true
+```
+
+The API process will run the BullMQ worker in the same container. No second service required.
+
+**Option B — separate worker service**
 
 - Root directory: `backend`
-- Start command: `npx tsx src/workers/generationWorker.ts`
-- Same env vars as API (except PORT not required for worker)
+- Start command: `npm run start:worker`
+- Same env vars as API (`MONGODB_URI`, `REDIS_URL`, etc.; do **not** set `START_INLINE_WORKER` on the worker)
 
 ### Option 2: Render
 
 **Web Service (API)**
 
-- Build: `cd backend && npm install && npm run build`
+- Build: `cd backend && npm install --include=dev && npm run build`
 - Start: `cd backend && npm start`
-- Add env vars above
+- Environment (minimum):
 
-**Background Worker**
+```
+MONGODB_URI=mongodb+srv://...@cluster0....mongodb.net/vedaai?...
+REDIS_URL=rediss://...@....upstash.io:6379
+CORS_ORIGIN=https://veda-ai-gamma.vercel.app
+START_INLINE_WORKER=true
+```
 
-- Create a **Background Worker** with start: `cd backend && npx tsx src/workers/generationWorker.ts`
+`START_INLINE_WORKER=true` runs the generation worker inside the API process (required if you do not deploy a separate worker).
+
+**Background Worker (optional instead of inline)**
+
+- Start: `cd backend && npm run start:worker`
+- Same `MONGODB_URI` and `REDIS_URL`; omit `START_INLINE_WORKER`
 
 ---
 
@@ -146,15 +171,26 @@ OPENAI_MODEL=gpt-4o-mini
 2. **Root Directory:** `frontend`
 3. Framework: Next.js (auto-detected)
 
-**Environment variables:**
+**Environment variables (choose one approach):**
+
+**Option A — direct API URL (simplest)**
 
 ```
 NEXT_PUBLIC_API_URL=https://your-api.railway.app
 NEXT_PUBLIC_WS_URL=https://your-api.railway.app
 ```
 
+**Option B — proxy REST through Vercel (avoids CORS for fetch; WebSocket still needs backend URL)**
+
+```
+API_PROXY_URL=https://your-api.railway.app
+NEXT_PUBLIC_WS_URL=https://your-api.railway.app
+```
+
+Do **not** leave env vars unset on Vercel — the app will try `http://localhost:4000` at build time or show **Failed to fetch** when creating assignments.
+
 4. Deploy
-5. Copy Vercel URL → update backend `CORS_ORIGIN` to that URL → redeploy API
+5. Copy Vercel URL → update backend `CORS_ORIGIN` to that URL (comma-separate preview URLs if needed) → redeploy API
 
 ---
 
@@ -208,9 +244,12 @@ For real internet access, use a VPS (DigitalOcean, AWS EC2) and run the same wit
 
 | Issue | Fix |
 |-------|-----|
-| CORS error | Set `CORS_ORIGIN` exactly to frontend URL (no trailing slash) |
+| **Failed to fetch** on Create | Set `NEXT_PUBLIC_API_URL` or `API_PROXY_URL` on Vercel; redeploy. Verify `https://your-api/health` returns `ok` |
+| **`command insert not found`** | Wrong `MONGODB_URI`: use Atlas **Drivers** URI (`cluster….mongodb.net/vedaai`), not SQL Interface (`query.mongodb.net`) |
+| CORS error | Set `CORS_ORIGIN` exactly to frontend URL (no trailing slash); multiple origins: `https://app.vercel.app,https://preview.vercel.app` |
 | WebSocket fails | Use same URL for `NEXT_PUBLIC_WS_URL`; ensure host supports WebSockets (Railway/Render do) |
-| Generation stuck | Worker service must be running with same `MONGODB_URI` and `REDIS_URL` |
+| Stuck at **0%** / no paper | Set `START_INLINE_WORKER=true` on Render API **or** run `npm run start:worker`; set valid `REDIS_URL` (Upstash) |
+| Generation stuck | Worker must run with same `MONGODB_URI` and `REDIS_URL` as the API |
 | 429 OpenAI | Remove key or add billing; mock fallback runs automatically |
 
 ---

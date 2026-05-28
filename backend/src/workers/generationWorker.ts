@@ -5,6 +5,7 @@ import { Worker, Job } from "bullmq";
 import mongoose from "mongoose";
 import { createRedisConnection } from "../config/redis";
 import { env } from "../config/env";
+import { connectDatabase } from "../config/database";
 import { Assignment } from "../models/Assignment";
 import { GENERATION_QUEUE, type GenerationJobData } from "../queues/generationQueue";
 import { cacheJobState } from "../queues/generationQueue";
@@ -86,11 +87,21 @@ async function processJob(job: Job<GenerationJobData>): Promise<void> {
   await job.updateProgress(100);
 }
 
-async function start(): Promise<void> {
-  await mongoose.connect(env.mongodbUri);
-  console.log("Worker: MongoDB connected");
+let workerInstance: Worker<GenerationJobData> | null = null;
 
-  const worker = new Worker<GenerationJobData>(
+/** Start BullMQ consumer. Safe to call from API process when START_INLINE_WORKER=true. */
+export async function startGenerationWorker(): Promise<Worker<GenerationJobData>> {
+  if (workerInstance) {
+    return workerInstance;
+  }
+
+  if (mongoose.connection.readyState === 0) {
+    await connectDatabase();
+  } else {
+    console.log("Worker: reusing MongoDB connection");
+  }
+
+  workerInstance = new Worker<GenerationJobData>(
     GENERATION_QUEUE,
     async (job) => {
       try {
@@ -119,15 +130,25 @@ async function start(): Promise<void> {
     }
   );
 
-  worker.on("completed", (job) => {
+  workerInstance.on("completed", (job) => {
     console.log(`Job ${job.id} completed`);
   });
 
-  worker.on("failed", (job, err) => {
+  workerInstance.on("failed", (job, err) => {
     console.error(`Job ${job?.id} failed:`, err.message);
   });
 
   console.log("Generation worker started");
+  return workerInstance;
 }
 
-start().catch(console.error);
+async function main(): Promise<void> {
+  await startGenerationWorker();
+}
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

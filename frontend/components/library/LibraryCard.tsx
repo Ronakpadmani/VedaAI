@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { format } from "date-fns";
 import { FileText, Trash2, Eye } from "lucide-react";
-import type { LibraryItem } from "@/lib/api";
+import { api, type LibraryItem } from "@/lib/api";
 import { useLibraryStore } from "@/store/libraryStore";
 
 interface LibraryCardProps {
@@ -66,7 +66,7 @@ export function LibraryCard({ item }: LibraryCardProps) {
         )}
         {item.assignmentId && (
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000"}/api/assignments/${item.assignmentId}/pdf`}
+            href={api.pdfUrl(item.assignmentId!)}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary flex-1 !py-2 text-xs"
